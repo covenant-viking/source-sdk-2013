@@ -20,6 +20,8 @@
 
 typedef unsigned int CRC32_t;
 
+#define ZOOM_THINK_INTERVAL 0.005f
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
@@ -165,6 +167,8 @@ private:
 	void		DescribeJoystickAxis( char const *axis, joy_axis_t *mapping );
 	char const	*DescribeAxis( int index );
 
+	float		m_flZoomThink;
+	float		m_flCamDistance;
 	enum
 	{
 		GAME_AXIS_NONE = 0,

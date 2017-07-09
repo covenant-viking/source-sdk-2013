@@ -40,6 +40,7 @@
 extern ConVar in_joystick;
 extern ConVar cam_idealpitch;
 extern ConVar cam_idealyaw;
+extern ConVar cam_idealdist;
 
 // For showing/hiding the scoreboard
 #include <game/client/iviewport.h>
@@ -311,6 +312,8 @@ CInput::CInput( void )
 	m_pCommands = NULL;
 	m_pCameraThirdData = NULL;
 	m_pVerifiedCommands = NULL;
+	m_flZoomThink = 0.0f;
+	m_flCamDistance = cam_idealdist.GetFloat();
 }
 
 //-----------------------------------------------------------------------------

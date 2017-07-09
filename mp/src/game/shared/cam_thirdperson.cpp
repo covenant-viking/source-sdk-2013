@@ -21,14 +21,14 @@ static Vector CAM_HULL_MAX( CAM_HULL_OFFSET, CAM_HULL_OFFSET, CAM_HULL_OFFSET);
 
 extern const ConVar *sv_cheats;
 
-void CAM_ToThirdPerson(void);
+void CAM_MasterToThirdPerson(void);
 void CAM_ToFirstPerson(void);
 
 void ToggleThirdPerson( bool bValue )
 {
 	if ( bValue == true )
 	{
-		CAM_ToThirdPerson();
+		CAM_MasterToThirdPerson();
 	}
 	else
 	{
@@ -79,7 +79,8 @@ void CThirdPersonManager::Update( void )
 	}
 
 	// If cheats have been disabled, pull us back out of third-person view.
-	if ( sv_cheats && !sv_cheats->GetBool() && GameRules() && GameRules()->AllowThirdPersonCamera() == false )
+	//BB: allow thirdperson camera
+	/*if ( sv_cheats && !sv_cheats->GetBool() && GameRules() && GameRules()->AllowThirdPersonCamera() == false )
 	{
 		if ( (bool)input->CAM_IsThirdPerson() == true )
 		{
@@ -94,7 +95,7 @@ void CThirdPersonManager::Update( void )
 		{
 			ToggleThirdPerson( m_bForced || cl_thirdperson.GetBool() );
 		}
-	}
+	}*/
 #endif
 
 }
@@ -159,7 +160,15 @@ void CThirdPersonManager::PositionCamera( CBasePlayer *pPlayer, const QAngle& an
 	
 		Vector endPos = origin;
 
-		Vector vecCamOffset = endPos + (camForward * - GetDesiredCameraOffset()[DIST_FORWARD]) + (camRight * GetDesiredCameraOffset()[ DIST_RIGHT ]) + (camUp * GetDesiredCameraOffset()[ DIST_UP ] );
+		Vector desiredcam = Vector(0, 0, 0);
+		const ConVar *idealdist = cvar->FindVar("cam_idealdist");
+		if (idealdist)
+		{
+			desiredcam[DIST_FORWARD] = idealdist->GetFloat();
+			//cam_idealdistright->GetFloat(), cam_idealdistup->GetFloat());
+		}
+
+		Vector vecCamOffset = endPos + (camForward * - desiredcam[DIST_FORWARD]) + (camRight * desiredcam[ DIST_RIGHT ]) + (camUp * desiredcam[ DIST_UP ] );
 
 		// use our previously #defined hull to collision trace
 		CTraceFilterSimple traceFilter( pPlayer, COLLISION_GROUP_NONE );
@@ -182,22 +191,22 @@ void CThirdPersonManager::PositionCamera( CBasePlayer *pPlayer, const QAngle& an
 	
 
 		// move the camera closer if it hit something
-		if( trace.fraction < 1.0  )
+		if (trace.fraction < 1.0)
 		{
-			m_vecCameraOffset[ DIST ] *= trace.fraction;
+			m_vecCameraOffset[DIST] *= trace.fraction;
 
-			UTIL_TraceHull( endPos, endPos + (camForward * - GetDesiredCameraOffset()[DIST_FORWARD]), CAM_HULL_MIN, CAM_HULL_MAX, MASK_SOLID & ~CONTENTS_MONSTER, &traceFilter, &trace );
+			UTIL_TraceHull(endPos, endPos + (camForward * -desiredcam[DIST_FORWARD]), CAM_HULL_MIN, CAM_HULL_MAX, MASK_SOLID & ~CONTENTS_MONSTER, &traceFilter, &trace);
 
-			if ( trace.fraction != 1.0f )
+			if (trace.fraction != 1.0f)
 			{
-				if ( trace.fraction != m_flTargetUpFraction )
+				if (trace.fraction != m_flTargetUpFraction)
 				{
 					m_flUpLerpTime = gpGlobals->curtime;
 				}
 
 				m_flTargetUpFraction = trace.fraction;
 
-				if ( m_flTargetUpFraction < m_flUpFraction )
+				if (m_flTargetUpFraction < m_flUpFraction)
 				{
 					m_flUpFraction = trace.fraction;
 					m_flUpLerpTime = gpGlobals->curtime;
