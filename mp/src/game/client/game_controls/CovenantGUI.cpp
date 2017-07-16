@@ -14,6 +14,7 @@
 #include "covenantgui.h"
 #include "in_buttons.h"
 #include "IGameUIFuncs.h" // for key bindings
+#include "cam_thirdperson.h"
 
 #include <vgui/IScheme.h>
 #include <vgui/ILocalize.h>
@@ -210,26 +211,84 @@ void CCovenantGUI::OnThink()
 			}
 		}
 	}
-	if (m_iDragStatus > 1)
+	if (m_iDragStatus > 0)
 	{
-		if ((m_iButtons & (1<<2)) && !input()->IsMouseDown(MOUSE_MIDDLE))
+		if ((m_iButtons & (1 << 2)) && !input()->IsMouseDown(MOUSE_MIDDLE))
 		{
 			OnMouseReleased(MOUSE_MIDDLE);
 		}
-		if ((m_iButtons & (1<<3)) && !input()->IsMouseDown(MOUSE_4))
+		if ((m_iButtons & (1 << 3)) && !input()->IsMouseDown(MOUSE_4))
 		{
 			OnMouseReleased(MOUSE_4);
 		}
-		if ((m_iButtons & (1<<4)) && !input()->IsMouseDown(MOUSE_5))
+		if ((m_iButtons & (1 << 4)) && !input()->IsMouseDown(MOUSE_5))
 		{
 			OnMouseReleased(MOUSE_5);
 		}
-		if (!input()->IsMouseDown(MOUSE_RIGHT))
+
+		if (m_iDragStatus == LMOUSE_DOWN)
+		{
+			int mousex, mousey;
+			input()->GetCursorPosition(mousex, mousey);
+			if (m_iDragMouseX != mousex || m_iDragMouseY != mousey)
+			{
+				m_iDragStatus++;
+				m_flDragTrigger = gpGlobals->curtime;
+				SetMouseInputEnabled(false);
+				g_ThirdPersonManager.SetFreeCam(true);
+			}
+		}
+		else if (m_iDragStatus == RMOUSE_DOWN)
+		{
+			int mousex, mousey;
+			input()->GetCursorPosition(mousex, mousey);
+			if (m_iDragMouseX != mousex || m_iDragMouseY != mousey)
+			{
+				m_iDragStatus++;
+				m_flDragTrigger = gpGlobals->curtime;
+				SetMouseInputEnabled(false);
+				//BB: reset the angles
+				if (idealpitch && idealyaw)
+				{
+					if (idealpitch->GetFloat() != 0.0f || idealyaw->GetFloat() != 0.0f)
+					{
+						QAngle viewangles;
+						engine->GetViewAngles(viewangles);
+						viewangles[PITCH] += idealpitch->GetFloat();
+						viewangles[YAW] += idealyaw->GetFloat();
+						g_ThirdPersonManager.LockCam(true);
+						idealpitch->SetValue(0);
+						idealyaw->SetValue(0);
+						char szbuf[32];
+						Q_snprintf(szbuf, sizeof(szbuf), "setang %f %f", viewangles[PITCH], viewangles[YAW]);
+						engine->ClientCmd(szbuf);
+					}
+				}
+			}
+		}
+
+		if (m_iDragStatus == RMOUSE_DRAG && !::input()->IsMouseDown(MOUSE_RIGHT))
 		{
 			m_iDragStatus = 0;
 			input()->SetCursorPos(m_iDragMouseX, m_iDragMouseY);
 			//ConMsg("Set mouse pos %d %d\n", m_iDragMouseX, m_iDragMouseY);
 			SetMouseInputEnabled(true);
+		}
+		else if (m_iDragStatus == RMOUSE_DOWN && !::input()->IsMouseDown(MOUSE_RIGHT))
+		{
+			m_iDragStatus = 0;
+		}
+
+		if (m_iDragStatus == LMOUSE_DRAG && !input()->IsMouseDown(MOUSE_LEFT))
+		{
+			m_iDragStatus = 0;
+			input()->SetCursorPos(m_iDragMouseX, m_iDragMouseY);
+			SetMouseInputEnabled(true); 
+			g_ThirdPersonManager.SetFreeCam(false);
+		}
+		else if (m_iDragStatus == LMOUSE_DOWN && !input()->IsMouseDown(MOUSE_LEFT))
+		{
+			m_iDragStatus = 0;
 		}
 	}
 
@@ -325,8 +384,8 @@ void CCovenantGUI::Update()
 		int mx, my, mwide, mtall;
 
 		VPANEL p = overview->GetVPanel();
-		vgui::ipanel()->GetPos( p, mx, my );
-		vgui::ipanel()->GetSize( p, mwide, mtall );
+		ipanel()->GetPos( p, mx, my );
+		ipanel()->GetSize( p, mwide, mtall );
 				
 		if ( my < btall )
 		{
@@ -414,6 +473,9 @@ void CCovenantGUI::Update()
 	delta = cvar->FindVar("cam_idealdelta");
 	mindist = cvar->FindVar("c_mindistance");
 	maxdist = cvar->FindVar("c_maxdistance");
+	idealpitch = cvar->FindVar("cam_idealpitch");
+	idealyaw = cvar->FindVar("cam_idealyaw");
+	camadjust = cvar->FindVar("cam_adjust");
 }
 
 //-----------------------------------------------------------------------------
@@ -477,31 +539,16 @@ void CCovenantGUI::OnMousePressed(MouseCode code)
 	input()->GetCursorPosition(mousex, mousey);
 	//ConMsg("Click at %f, %d %d\n", gpGlobals->curtime, mousex, mousey);
 
-	//TGB: some weirdness is making us receive clicks twice. I blame vgui.
+	//Check for doubleclick
 	if (m_flLastClick == gpGlobals->curtime)
 		return;
 	else
 		m_flLastClick = gpGlobals->curtime;
 
-	
-	//::input->GetFullscreenMousePos(&mousex, &mousey);
 
 
-	if (m_iDragStatus > 1)
-	{
-		/* 0000277 TGB:	if the user has moved the mouse out of the screen area while dragging
-		and let go of the mouse, this is a click we can't detect, and the drag
-		is not ended. Instead we let the user end the drag succesfully with his
-		first click, allowing him to recover it. Previously, the click would be
-		needed to clear the box/line but have no effect.
-		This may not be entirely expected behaviour, but it's learnable and it's
-		the best we can do as long as we can't detect off-screen events.
-		Long story short: we don't want to reset dragstatus here if we're dragging.*/
-
+	if (m_iDragStatus > 0)
 		return;
-	}
-
-	m_iDragStatus = 0; //if we just clicked, we're not dragging (yet)
 
 	m_iDragMouseX = mousex;
 	m_iDragMouseY = mousey;
@@ -517,11 +564,10 @@ void CCovenantGUI::OnMousePressed(MouseCode code)
 	switch (code)
 	{
 	case MOUSE_LEFT:
+		m_iDragStatus = LMOUSE_DOWN;
 		break;
 	case MOUSE_RIGHT:
 		m_iDragStatus = RMOUSE_DOWN;
-		m_flDragTrigger = gpGlobals->curtime;
-		SetMouseInputEnabled(false);
 		break;
 	case MOUSE_MIDDLE:
 		currentBinding = gameuifuncs->GetBindingForButtonCode(MOUSE_MIDDLE);

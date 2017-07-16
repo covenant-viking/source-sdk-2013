@@ -26,21 +26,28 @@ static ConVar cam_command( "cam_command", "0", FCVAR_CHEAT | FCVAR_CHEAT);	 // t
 static ConVar cam_snapto( "cam_snapto", "0", FCVAR_ARCHIVE | FCVAR_CHEAT);	 // snap to thirdperson view
 static ConVar cam_ideallag( "cam_ideallag", "4.0", FCVAR_ARCHIVE| FCVAR_CHEAT, "Amount of lag used when matching offset to ideal angles in thirdperson view" );
 static ConVar cam_idealdelta( "cam_idealdelta", "2.0", FCVAR_ARCHIVE, "Controls the speed when matching offset to ideal angles in thirdperson view" );
-ConVar cam_idealyaw( "cam_idealyaw", "0", FCVAR_ARCHIVE| FCVAR_CHEAT );	 // thirdperson yaw
-ConVar cam_idealpitch( "cam_idealpitch", "0", FCVAR_ARCHIVE | FCVAR_CHEAT  );	 // thirperson pitch
+ConVar cam_idealyaw( "cam_idealyaw", "0" );	 // thirdperson yaw
+ConVar cam_idealpitch( "cam_idealpitch", "0" );	 // thirperson pitch
 ConVar cam_idealdist( "cam_idealdist", "150", FCVAR_ARCHIVE );	 // thirdperson distance
 ConVar cam_idealdistright( "cam_idealdistright", "0", FCVAR_ARCHIVE | FCVAR_CHEAT );	 // thirdperson distance
 ConVar cam_idealdistup( "cam_idealdistup", "0", FCVAR_ARCHIVE | FCVAR_CHEAT );	 // thirdperson distance
 static ConVar cam_collision( "cam_collision", "1", FCVAR_ARCHIVE | FCVAR_CHEAT, "When in thirdperson and cam_collision is set to 1, an attempt is made to keep the camera from passing though walls." );
 static ConVar cam_showangles( "cam_showangles", "0", FCVAR_CHEAT, "When in thirdperson, print viewangles/idealangles/cameraoffsets to the console." );
 static ConVar c_maxpitch( "c_maxpitch", "90", FCVAR_ARCHIVE| FCVAR_CHEAT );
-static ConVar c_minpitch( "c_minpitch", "0", FCVAR_ARCHIVE| FCVAR_CHEAT );
+static ConVar c_minpitch( "c_minpitch", "-90", FCVAR_ARCHIVE| FCVAR_CHEAT );
 static ConVar c_maxyaw( "c_maxyaw",   "135", FCVAR_ARCHIVE | FCVAR_CHEAT);
 static ConVar c_minyaw( "c_minyaw",   "-135", FCVAR_ARCHIVE| FCVAR_CHEAT );
 static ConVar c_maxdistance( "c_maxdistance",   "300", FCVAR_ARCHIVE| FCVAR_CHEAT );
 static ConVar c_mindistance( "c_mindistance",   "30", FCVAR_ARCHIVE| FCVAR_CHEAT );
 static ConVar c_orthowidth( "c_orthowidth",   "100", FCVAR_ARCHIVE| FCVAR_CHEAT );
 static ConVar c_orthoheight( "c_orthoheight",   "100", FCVAR_ARCHIVE | FCVAR_CHEAT );
+
+ConVar cam_speed("cam_speed", "60", FCVAR_ARCHIVE, "Camera speed when under game control");
+ConVar cam_adjust("cam_adjust", "0", FCVAR_ARCHIVE, "Camera Adjust Control: 0=Never, 1=Always, 2=Moving"); //0=never, 1=always, 2=moving
+ConVar cam_clicktomove("cam_clicktomove", "0", FCVAR_ARCHIVE); //0=never, 1=always, 2=moving
+ConVar clicktomove("clicktomove", "0", FCVAR_ARCHIVE);
+ConVar cam_invertmouse("cam_invertmouse", "0", FCVAR_ARCHIVE, "Inverts pitch controls"); //invert mouse pitch 0=no, 1=yes
+static ConVar cam_spin("cam_spin", "0.25", FCVAR_ARCHIVE, "Controls the speed when spinning camera");
 
 static kbutton_t cam_pitchup, cam_pitchdown, cam_yawleft, cam_yawright;
 static kbutton_t cam_in, cam_out; // -- "cam_move" is unused
@@ -204,14 +211,14 @@ float MoveToward( float cur, float goal, float lag )
 
 		if( cur < goal )
 		{
-			if( cur < goal - 1.0 )
+			if( cur < goal - 0.1 )
 				cur += ( goal - cur ) / lag;
 			else
 				cur = goal;
 		}
 		else
 		{
-			if( cur > goal + 1.0 )
+			if( cur > goal + 0.1 )
 				cur -= ( cur - goal ) / lag;
 			else
 				cur = goal;
@@ -268,55 +275,68 @@ void CInput::CAM_Think( void )
 	if( !m_fCameraInThirdPerson )
 		return;
 
+	//BB: we are hijacking this code
 	// In Maya-mode
-	if ( Is_CAM_ThirdPerson_MayaMode() )
+	if (g_ThirdPersonManager.IsFreeCam())
 	{
 		// Unless explicitly moving the camera, don't move it
-		m_fCameraInterceptingMouse = m_fCameraMovingWithMouse =
-			vgui::input()->IsKeyDown( KEY_LALT ) || vgui::input()->IsKeyDown( KEY_RALT );
-		if ( !m_fCameraMovingWithMouse )
-			return;
+		/*m_fCameraInterceptingMouse = m_fCameraMovingWithMouse =
+			vgui::input()->IsKeyDown( KEY_LALT ) || vgui::input()->IsKeyDown( KEY_RALT );*/
+		m_fCameraInterceptingMouse = m_fCameraMovingWithMouse = true;
+		//if ( !m_fCameraMovingWithMouse )
+		//	return;
 
 		// Zero-out camera-control kbutton_t structures
-		memset( &cam_pitchup, 0, sizeof( cam_pitchup ) );
-		memset( &cam_pitchdown, 0, sizeof( cam_pitchdown ) );
-		memset( &cam_yawleft, 0, sizeof( cam_yawleft ) );
-		memset( &cam_yawright, 0, sizeof( cam_yawright ) );
-		memset( &cam_in, 0, sizeof( cam_in ) );
-		memset( &cam_out, 0, sizeof( cam_out ) );
+		memset(&cam_pitchup, 0, sizeof(cam_pitchup));
+		memset(&cam_pitchdown, 0, sizeof(cam_pitchdown));
+		memset(&cam_yawleft, 0, sizeof(cam_yawleft));
+		memset(&cam_yawright, 0, sizeof(cam_yawright));
+		memset(&cam_in, 0, sizeof(cam_in));
+		memset(&cam_out, 0, sizeof(cam_out));
 
 		// Unless left or right mouse button is down, don't do anything
 #ifndef _XBOX
-		if ( /* Left+Middle Button Down */ vgui::input()->IsMouseDown( MOUSE_LEFT ) && vgui::input()->IsMouseDown( MOUSE_MIDDLE ) )
-		{
+		//if ( /* Left+Middle Button Down */ vgui::input()->IsMouseDown(MOUSE_LEFT) && vgui::input()->IsMouseDown(MOUSE_MIDDLE))
+		//{
 			// Do only zoom in/out camera adjustment
-			m_fCameraDistanceMove = true;
-		}
-		else if ( /* Left Button Down */ vgui::input()->IsMouseDown( MOUSE_LEFT ) )
-		{
+		//	m_fCameraDistanceMove = true;
+		//}
+		//else if ( /* Left Button Down */ vgui::input()->IsMouseDown(MOUSE_LEFT))
+		//{
 			// Do only rotational camera movement
 			m_fCameraDistanceMove = false;
-		}
-		else if ( /* Right Button Down */ vgui::input()->IsMouseDown( MOUSE_RIGHT ) )
-		{
+		//}
+		//else if ( /* Right Button Down */ vgui::input()->IsMouseDown(MOUSE_RIGHT))
+		//{
 			// Do only zoom in/out camera adjustment
-			m_fCameraDistanceMove = true;
-		}
-		else
-		{
+		//	m_fCameraDistanceMove = true;
+		//}
+		//else
+		//{
 			// Neither left or right buttons down, don't do anything
-			ResetMouse();
-			return;
-		}
+		//	ResetMouse();
+		//	return;
+		//}
 #endif
 	}
+	else
+		m_fCameraInterceptingMouse = m_fCameraMovingWithMouse = false; //BB: kinda strange that this is necessary
 	
 	idealAngles[ PITCH ] = cam_idealpitch.GetFloat();
 	idealAngles[ YAW ]   = cam_idealyaw.GetFloat();
 	idealAngles[ DIST ]  = m_flCamDistance;
 	//BB: wtf why is this necessary? I am not using m_vecDesiredCameraOffset ever!
 	g_ThirdPersonManager.SetDesiredCameraOffset(Vector(idealAngles[DIST], cam_idealdistright.GetFloat(), cam_idealdistup.GetFloat()));
-	
+
+	int mouse_clicked = g_ThirdPersonManager.GetMouse();
+	if (vgui::input()->IsMouseDown(MOUSE_LEFT))
+		mouse_clicked = 1;
+	else if (vgui::input()->IsMouseDown(MOUSE_RIGHT))
+		mouse_clicked = 2;
+	else if (mouse_clicked < 2)
+		mouse_clicked = 0;
+	g_ThirdPersonManager.SetMouse(mouse_clicked);
+
 	//
 	//movement of the camera with the mouse
 	//
@@ -346,28 +366,27 @@ void CInput::CAM_Think( void )
 			if (m_nCameraX>x)
 			{
 				//if ((idealAngles[YAW]>=225.0)||(idealAngles[YAW]<135.0))
-				if (idealAngles[YAW]<c_maxyaw.GetFloat())
+				if (idealAngles[YAW]>c_minyaw.GetFloat())
 				{
-					idealAngles[ YAW ] += (CAM_ANGLE_MOVE)*((m_nCameraX-x)/2);
+					idealAngles[YAW] -= (cam_spin.GetFloat())*((m_nCameraX - x) / 2);
 				}
-				if (idealAngles[YAW]>c_maxyaw.GetFloat())
+				if (idealAngles[YAW]<c_minyaw.GetFloat())
 				{
-					
-					idealAngles[YAW]=c_maxyaw.GetFloat();
+					idealAngles[YAW] = c_minyaw.GetFloat();
 				}
+				
 			}
 			else if (m_nCameraX<x)
 			{
 				//if ((idealAngles[YAW]<=135.0)||(idealAngles[YAW]>225.0))
-				if (idealAngles[YAW]>c_minyaw.GetFloat())
+				if (idealAngles[YAW]<c_maxyaw.GetFloat())
 				{
-					idealAngles[ YAW ] -= (CAM_ANGLE_MOVE)* ((x-m_nCameraX)/2);
+					idealAngles[YAW] += (cam_spin.GetFloat())* ((x - m_nCameraX) / 2);
 					
 				}
-				if (idealAngles[YAW]<c_minyaw.GetFloat())
+				if (idealAngles[YAW]>c_maxyaw.GetFloat())
 				{
-					idealAngles[YAW]=c_minyaw.GetFloat();
-					
+					idealAngles[YAW] = c_maxyaw.GetFloat();
 				}
 			}
 			
@@ -376,24 +395,40 @@ void CInput::CAM_Think( void )
 			//also make sure camera is within bounds
 			if (m_nCameraY > y)
 			{
-				if(idealAngles[PITCH]<c_maxpitch.GetFloat())
+				if (cam_invertmouse.GetInt() > 0)
 				{
-					idealAngles[PITCH] +=(CAM_ANGLE_MOVE)* ((m_nCameraY-y)/2);
+					idealAngles[PITCH] += (CAM_ANGLE_MOVE)* ((m_nCameraY - y) / 2);
+					/*if (idealAngles[PITCH] > c_maxpitch.GetFloat())
+					{
+						idealAngles[PITCH] = c_maxpitch.GetFloat();
+					}*/
 				}
-				if (idealAngles[PITCH]>c_maxpitch.GetFloat())
+				else
 				{
-					idealAngles[PITCH]=c_maxpitch.GetFloat();
+					idealAngles[PITCH] -= (CAM_ANGLE_MOVE)* ((m_nCameraY - y) / 2);
+					if (idealAngles[PITCH] < c_minpitch.GetFloat())
+					{
+						idealAngles[PITCH] = c_minpitch.GetFloat();
+					}
 				}
 			}
 			else if (m_nCameraY<y)
 			{
-				if (idealAngles[PITCH]>c_minpitch.GetFloat())
+				if (cam_invertmouse.GetInt() > 0)
 				{
-					idealAngles[PITCH] -= (CAM_ANGLE_MOVE)*((y-m_nCameraY)/2);
+					idealAngles[PITCH] -= (CAM_ANGLE_MOVE)*((y - m_nCameraY) / 2);
+					/*if (idealAngles[PITCH] < c_minpitch.GetFloat())
+					{
+						idealAngles[PITCH] = c_minpitch.GetFloat();
+					}*/
 				}
-				if (idealAngles[PITCH]<c_minpitch.GetFloat())
+				else
 				{
-					idealAngles[PITCH]=c_minpitch.GetFloat();
+					idealAngles[PITCH] += (CAM_ANGLE_MOVE)*((y - m_nCameraY) / 2);
+					/*if (idealAngles[PITCH] > c_maxpitch.GetFloat())
+					{
+						idealAngles[PITCH] = c_maxpitch.GetFloat();
+					}*/
 				}
 			}
 			
@@ -525,16 +560,17 @@ void CInput::CAM_Think( void )
 #endif
 	}
 
+	//BB: we dont want to store or pop camera angles!
 	// Obtain engine view angles and if they popped while the camera was static,
 	// fix the camera angles as well
 	engine->GetViewAngles( viewangles );
-	static QAngle s_oldAngles = viewangles;
-	if ( Is_CAM_ThirdPerson_MayaMode() && ( s_oldAngles != viewangles ) )
+	/*static QAngle s_oldAngles = viewangles;
+	if ( g_ThirdPersonManager.IsFreeCam() && (s_oldAngles != viewangles))
 	{
 		idealAngles[ PITCH ] += s_oldAngles[ PITCH ] - viewangles[ PITCH ];
 		idealAngles[  YAW  ] += s_oldAngles[  YAW  ] - viewangles[  YAW  ];
 		s_oldAngles = viewangles;
-	}
+	}*/
 
 	// bring the pitch values back into a range that MoveToward can handle
 	if ( idealAngles[ PITCH ] > 180 )
@@ -556,27 +592,112 @@ void CInput::CAM_Think( void )
 		idealAngles[ YAW ] += 360;
 
 	// clamp pitch, yaw and dist...
-	idealAngles[ PITCH ] = clamp( idealAngles[ PITCH ], c_minpitch.GetFloat(), c_maxpitch.GetFloat() );
+	//idealAngles[ PITCH ] = clamp( idealAngles[ PITCH ], c_minpitch.GetFloat(), c_maxpitch.GetFloat() );
 	idealAngles[ YAW ]   = clamp( idealAngles[ YAW ], c_minyaw.GetFloat(), c_maxyaw.GetFloat() );
 	idealAngles[ DIST ]  = clamp( idealAngles[ DIST ], c_mindistance.GetFloat(), c_maxdistance.GetFloat() );
-	
-	// update ideal angles
-	cam_idealpitch.SetValue( idealAngles[ PITCH ] );
-	cam_idealyaw.SetValue( idealAngles[ YAW ] );
-	m_flCamDistance = idealAngles[DIST];
-	//cam_idealdist.SetValue( idealAngles[ DIST ] );
 	
 	// Move the CameraOffset "towards" the idealAngles
 	// Note: CameraOffset = viewangle + idealAngle
 	VectorCopy( g_ThirdPersonManager.GetCameraOffsetAngles(), camOffset );
 	
-	if( cam_snapto.GetInt() )
+	//BB: unused
+	/*if( cam_snapto.GetInt() )
 	{
 		camOffset[ YAW ] = cam_idealyaw.GetFloat() + viewangles[ YAW ];
 		camOffset[ PITCH ] = cam_idealpitch.GetFloat() + viewangles[ PITCH ];
 		camOffset[ DIST ] = cam_idealdist.GetFloat();
+	}*/
+	//BB: VERY REPETITIVE/BLOATED!!! makes it easier to read/think through
+	//BB: TODO: CLEAN THIS UP!
+	if (cam_adjust.GetInt() == 1) //ALWAYS
+	{
+		if (mouse_clicked == 0)
+		{
+			float lag = MAX(1, 1 + cam_speed.GetFloat());
+
+			camOffset[YAW] = MoveToward(camOffset[YAW], viewangles[YAW], lag);
+			idealAngles[YAW] = camOffset[YAW] - viewangles[YAW];
+
+			camOffset[PITCH] = MoveToward(camOffset[PITCH], viewangles[PITCH], lag);
+			idealAngles[PITCH] = camOffset[PITCH] - viewangles[PITCH];
+
+			if (camOffset[YAW] == viewangles[YAW] && camOffset[PITCH] == viewangles[PITCH])
+				g_ThirdPersonManager.SetMouse(0);
+
+			if (idealAngles[YAW] >= 180)
+				idealAngles[YAW] -= 360;
+			else if (idealAngles[YAW] <= -180)
+				idealAngles[YAW] += 360;
+
+			if (idealAngles[PITCH] > 180)
+				idealAngles[PITCH] -= 360;
+			else if (idealAngles[PITCH] < -180)
+				idealAngles[PITCH] += 360;
+		}
+		else
+		{
+			float lag = MAX(1, 1 + cam_ideallag.GetFloat());
+
+			if (camOffset[YAW] - viewangles[YAW] != cam_idealyaw.GetFloat())
+				camOffset[YAW] = MoveToward(camOffset[YAW], cam_idealyaw.GetFloat() + viewangles[YAW], lag);
+
+			if (camOffset[PITCH] - viewangles[PITCH] != cam_idealpitch.GetFloat())
+				camOffset[PITCH] = MoveToward(camOffset[PITCH], cam_idealpitch.GetFloat() + viewangles[PITCH], lag);
+
+			if (abs(camOffset[DIST] - cam_idealdist.GetFloat()) < 2.0)
+				camOffset[DIST] = cam_idealdist.GetFloat();
+			else
+				camOffset[DIST] += (cam_idealdist.GetFloat() - camOffset[DIST]) / lag;
+
+		}
 	}
-	else
+	else if (cam_adjust.GetInt() == 2) //MOVING
+	{
+		C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+		Vector vel;
+		if (pPlayer)
+			vel = pPlayer->GetAbsVelocity();
+		if (vel.Length() > 1.0f && mouse_clicked == 0)
+		{
+			float lag = MAX(1, 1 + cam_speed.GetFloat() * 3);
+
+			camOffset[YAW] = MoveToward(camOffset[YAW], viewangles[YAW], lag);
+			idealAngles[YAW] = camOffset[YAW] - viewangles[YAW];
+
+			camOffset[PITCH] = MoveToward(camOffset[PITCH], viewangles[PITCH], lag);
+			idealAngles[PITCH] = camOffset[PITCH] - viewangles[PITCH];
+
+			if (camOffset[YAW] == viewangles[YAW] && camOffset[PITCH] == viewangles[PITCH])
+				g_ThirdPersonManager.SetMouse(0);
+
+			if (idealAngles[YAW] >= 180)
+				idealAngles[YAW] -= 360;
+			else if (idealAngles[YAW] <= -180)
+				idealAngles[YAW] += 360;
+
+			if (idealAngles[PITCH] > 180)
+				idealAngles[PITCH] -= 360;
+			else if (idealAngles[PITCH] < -180)
+				idealAngles[PITCH] += 360;
+		}
+		else
+		{
+			float lag = MAX(1, 1 + cam_ideallag.GetFloat());
+
+			if (camOffset[YAW] - viewangles[YAW] != cam_idealyaw.GetFloat())
+				camOffset[YAW] = MoveToward(camOffset[YAW], cam_idealyaw.GetFloat() + viewangles[YAW], lag);
+
+			if (camOffset[PITCH] - viewangles[PITCH] != cam_idealpitch.GetFloat())
+				camOffset[PITCH] = MoveToward(camOffset[PITCH], cam_idealpitch.GetFloat() + viewangles[PITCH], lag);
+
+			if (abs(camOffset[DIST] - cam_idealdist.GetFloat()) < 2.0)
+				camOffset[DIST] = cam_idealdist.GetFloat();
+			else
+				camOffset[DIST] += (cam_idealdist.GetFloat() - camOffset[DIST]) / lag;
+
+		}
+	}
+	else //NEVER
 	{
 		float lag = MAX( 1, 1 + cam_ideallag.GetFloat() );
 
@@ -591,6 +712,23 @@ void CInput::CAM_Think( void )
 		else
 			camOffset[ DIST ] += ( cam_idealdist.GetFloat() - camOffset[ DIST ] ) / lag;
 	}
+
+	if (camOffset[PITCH] > 90.0f && camOffset[PITCH] < 180.0f)
+	{
+		camOffset[PITCH] = 90.0f;
+		idealAngles[PITCH] = 90.0f - viewangles[PITCH];
+	}
+	else if (camOffset[PITCH] > 180.0f && camOffset[PITCH] < 270.0f)
+	{
+		camOffset[PITCH] = 270.0f;
+		idealAngles[PITCH] = -90.0f - viewangles[PITCH];
+	}
+
+	// update ideal angles
+	cam_idealpitch.SetValue(idealAngles[PITCH]);
+	cam_idealyaw.SetValue(idealAngles[YAW]);
+	m_flCamDistance = idealAngles[DIST];
+	//cam_idealdist.SetValue( idealAngles[ DIST ] );
 
 	// move the camera closer to the player if it hit something
 	if ( cam_collision.GetInt() )
@@ -610,9 +748,20 @@ void CInput::CAM_Think( void )
 		engine->Con_NPrintf( 4, "Pitch: %6.1f   Yaw: %6.1f %38s", viewangles[ PITCH ], viewangles[ YAW ], "view angles" );
 		engine->Con_NPrintf( 6, "Pitch: %6.1f   Yaw: %6.1f   Dist: %6.1f %19s", cam_idealpitch.GetFloat(), cam_idealyaw.GetFloat(), cam_idealdist.GetFloat(), "ideal angles" );
 		engine->Con_NPrintf( 8, "Pitch: %6.1f   Yaw: %6.1f   Dist: %6.1f %16s", g_ThirdPersonManager.GetCameraOffsetAngles()[ PITCH ], g_ThirdPersonManager.GetCameraOffsetAngles()[ YAW ], g_ThirdPersonManager.GetCameraOffsetAngles()[ DIST ], "camera offset" );
+		engine->Con_NPrintf(10, "Pitch: %6.1f   Yaw: %6.1f   Dist: %6.1f %16s", camOffset[PITCH], camOffset[YAW], camOffset[DIST], "computed camera offset");
+		engine->Con_NPrintf(12, "Pitch: %6.1f   Yaw: %6.1f   Dist: %6.1f %16s", g_ThirdPersonManager.GetLockedCameraOffsetAngles()[PITCH], g_ThirdPersonManager.GetLockedCameraOffsetAngles()[YAW], g_ThirdPersonManager.GetLockedCameraOffsetAngles()[DIST], "locked camera offset");
 	}
 
-	g_ThirdPersonManager.SetCameraOffsetAngles( camOffset );
+	if (g_ThirdPersonManager.IsLockedCam())
+	{
+		g_ThirdPersonManager.SetCameraOffsetAngles(g_ThirdPersonManager.GetLockedCameraOffsetAngles());
+		if (fabs(camOffset[PITCH] - g_ThirdPersonManager.GetLockedCameraOffsetAngles()[PITCH]) < 0.1f && fabs(camOffset[YAW] - g_ThirdPersonManager.GetLockedCameraOffsetAngles()[YAW]) < 0.1f)
+			g_ThirdPersonManager.LockCam(false);
+		else if (gpGlobals->curtime > g_ThirdPersonManager.LockTime())//BB: timeout... kludgey but works
+			g_ThirdPersonManager.LockCam(false);
+	}
+	else
+		g_ThirdPersonManager.SetCameraOffsetAngles( camOffset );
 }
 
 //------------------------------------------------------------------------------

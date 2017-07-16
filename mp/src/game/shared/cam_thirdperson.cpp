@@ -51,8 +51,23 @@ CThirdPersonManager::CThirdPersonManager( void )
 {
 }
 
+void CThirdPersonManager::LockCam(bool bCam)
+{
+	if (bCam)
+	{
+		m_LockedOffset = m_vecCameraOffset;
+		m_fLockTime = gpGlobals->curtime + 10*gpGlobals->interval_per_tick;
+	}
+	
+	m_bLockedCam = bCam;
+}
+
 void CThirdPersonManager::Init( void )
 {
+	m_iMouse = 0;
+	m_bFreeCam = false;
+	m_fLockTime = 0.0f;
+	m_bLockedCam = false;
 	m_bOverrideThirdPerson = false;
 	m_bForced = false;
 	m_flUpFraction = 0.0f;

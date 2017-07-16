@@ -1267,9 +1267,6 @@ CON_COMMAND_F( setpos, "Move player to specified origin (must have sv_cheats).",
 //------------------------------------------------------------------------------
 void CC_setang_f (const CCommand &args)
 {
-	if ( !sv_cheats->GetBool() )
-		return;
-
 	CBasePlayer *pPlayer = ToBasePlayer( UTIL_GetCommandClient() ); 
 	if ( !pPlayer )
 		return;
@@ -1289,8 +1286,8 @@ void CC_setang_f (const CCommand &args)
 
 	pPlayer->SnapEyeAngles( newang );
 }
-
-static ConCommand setang("setang", CC_setang_f, "Snap player eyes to specified pitch yaw <roll:optional> (must have sv_cheats).", FCVAR_CHEAT );
+//BB: we are using this for better or worse!
+static ConCommand setang("setang", CC_setang_f, "Snap player eyes to specified pitch yaw <roll:optional>." );
 
 static float GetHexFloat( const char *pStr )
 {

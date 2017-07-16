@@ -24,7 +24,6 @@
 
 //BB: allow use of GetFullscreenMousePos
 #include <vgui/IInput.h>
-//#include "iinput.h"
 
 class KeyValues;
 
@@ -101,7 +100,7 @@ protected:
 	bool m_bSpecScoreboard;
 
 private:
-	int		m_iDragStatus;		//0 = none, 1 = mousedown, may be dragging, 2 = definite drag
+	int		m_iDragStatus;
 	int		m_iButtons; //0 = none, 1 = 1, 2 = 2, 4 = 4, 8 = 5
 	int		m_iDragMouseX, m_iDragMouseY;
 	float	m_flLastClick;
@@ -111,6 +110,9 @@ private:
 	ConVar *delta;
 	ConVar *mindist;
 	ConVar *maxdist;
+	ConVar *idealyaw;
+	ConVar *idealpitch;
+	ConVar *camadjust;
 };
 
 extern CCovenantGUI * g_pCovenantGUI;

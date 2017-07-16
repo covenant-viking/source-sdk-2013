@@ -44,6 +44,7 @@ public:
 	CThirdPersonManager();
 	void	SetCameraOffsetAngles( const Vector& vecOffset ) { m_vecCameraOffset = vecOffset; }
 	const Vector&	GetCameraOffsetAngles( void ) const { return m_vecCameraOffset; }
+	const Vector&	GetLockedCameraOffsetAngles(void) const { return m_LockedOffset; }
 	
 	void	SetDesiredCameraOffset( const Vector& vecOffset ) { m_vecDesiredCameraOffset = vecOffset; }
 	const Vector&	GetDesiredCameraOffset( void ) const { return m_vecDesiredCameraOffset; }
@@ -59,6 +60,14 @@ public:
 
 	void	UseCameraOffsets( bool bUse ) { m_bUseCameraOffsets = bUse; }
 	bool	UsingCameraOffsets( void ) { return m_bUseCameraOffsets; }
+
+	bool	IsFreeCam() { return m_bFreeCam; }
+	void	SetFreeCam(bool bCam) { m_bFreeCam = bCam; }
+	bool	IsLockedCam() { return m_bLockedCam; }
+	float	LockTime() { return m_fLockTime; }
+	void	LockCam(bool bCam);
+	void	SetMouse(int im) { m_iMouse = im; }
+	int		GetMouse() { return m_iMouse; }
 
 	const QAngle&	GetCameraViewAngles( void ) const { return m_ViewAngles; }
 
@@ -96,6 +105,12 @@ private:
 	bool	m_bOverrideThirdPerson;
 
 	bool	m_bForced;
+
+	bool	m_bFreeCam;
+	bool	m_bLockedCam;
+	Vector	m_LockedOffset;
+	float	m_fLockTime;
+	int		m_iMouse;
 
 	float	m_flUpOffset;
 
